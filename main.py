@@ -128,6 +128,11 @@ def get_total_database_size():
     total_size = sum(movie.get('size', 0) for movie in MOVIE_DB)
     return get_readable_size(total_size)
 
+# --- HELPER: CHECK IF MESSAGE IS COMMAND ---
+def is_command(text):
+    """Check if the message starts with a slash (/) indicating it's a command"""
+    return text.strip().startswith("/")
+
 # --- HELPER: SHOW PAGE ---
 async def show_page(client, chat_id, user_id, page=1, status_msg=None):
     """Displays the specific page of results."""
@@ -418,6 +423,14 @@ async def view_stats_callback(client, callback: CallbackQuery):
 # --- PRIVATE SEARCH HANDLER ---
 @app.on_message(filters.private & filters.text & ~filters.command(["start", "movie", "help", "stats", "about"]))
 async def search_handler(client, message):
+    # Check if message starts with "/" - treat as unknown command
+    if is_command(message.text):
+        await message.reply(
+            "❌ Unknown command. Use /help to see available commands.\n"
+            "❌ Agyaat command. Uplabdh commands dekhne ke liye /help use karein."
+        )
+        return
+    
     user_query = message.text.strip().lower()
     words = user_query.split()
     if not words: 
@@ -545,6 +558,7 @@ async def send_movie_callback(client, callback: CallbackQuery):
         custom_caption = (
             f"<a href='{CHANNEL_LINK}'>{f_name}</a>\n"
             f"<b>Size:</b> {f_size}\n\n"
+            f"📱 Phone: MX Player use karein\n"
             f"   💻 PC: VLC Media Player use karein"
         )
         
@@ -609,4 +623,3 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
 
 print("Bot Started...")
 app.run()
-
