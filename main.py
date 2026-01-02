@@ -66,30 +66,33 @@ def update_stats(action, user_id=None, is_group=False):
             "start_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
     
-    # Convert list back to set for operations
-    if isinstance(data.get("total_users"), list):
-        data["total_users"] = set(data["total_users"])
-    elif "total_users" not in data:
-        data["total_users"] = set()
+    # Ensure total_users is a list
+    if not isinstance(data.get("total_users"), list):
+        data["total_users"] = []
+    
+    # Convert to set for operations
+    user_set = set(data["total_users"])
 
     # Update based on action
     if action == "search":
-        data["total_searches"] += 1
+        data["total_searches"] = data.get("total_searches", 0) + 1
         if is_group:
             data["group_searches"] = data.get("group_searches", 0) + 1
         else:
             data["private_searches"] = data.get("private_searches", 0) + 1
     elif action == "download":
-        data["files_sent"] += 1
+        data["files_sent"] = data.get("files_sent", 0) + 1
     elif action == "failed_search":
         data["failed_searches"] = data.get("failed_searches", 0) + 1
+    elif action == "user":
+        pass  # Just tracking user, no counter update
     
     # Add user to set
     if user_id:
-        data["total_users"].add(user_id)
+        user_set.add(user_id)
     
-    # Convert set to list for JSON serialization
-    data["total_users"] = list(data["total_users"])
+    # Convert set back to list for JSON serialization
+    data["total_users"] = list(user_set)
     
     with open(STATS_FILE, "w") as f:
         json.dump(data, f, indent=4)
@@ -363,15 +366,23 @@ Yeh ek advanced movie search aur download bot hai jo aapko movies jaldi dhoondhn
   Bade results ke liye pagination support
 • Size display for every file
   Har file ke liye size display
+• Auto-delete in groups (1 min)
+  Groups mein auto-delete (1 minute)
 • Bilingual support (English + Hindi)
+  Do bhasha support (Angrezi + Hindi)
+
+🔧 **Technology / Takneek:**
+Built with Pyrogram and Python
+Pyrogram aur Python se banaaya gaya
 
 💡 **Tips for Best Results:**
 1. Use correct spelling
 2. Try different variations
 3. Check file size before downloading
 
-📢 **Stay Updated:**
+📢 **Stay Updated / Judey Rahein:**
 Join our channel for latest movies!
+Nayi movies ke liye hamara channel join karein!
 """
     
     keyboard = InlineKeyboardMarkup([
@@ -535,6 +546,10 @@ async def send_movie_callback(client, callback: CallbackQuery):
             f"<a href='{CHANNEL_LINK}'>{f_name}</a>\n"
             f"<b>Size:</b> {f_size}\n\n"
             f"💡 <b>For Best Experience:</b>\n"
+            f"   📱 Phone: Use MX Player\n"
+            f"   💻 PC: Use VLC Media Player\n\n"
+            f"💡 <b>Behtar Anubhav Ke Liye:</b>\n"
+            f"   📱 Phone: MX Player use karein\n"
             f"   💻 PC: VLC Media Player use karein"
         )
         
