@@ -8,8 +8,8 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 API_ID = 21862154
 API_HASH = "af2a54cdf05008758eca7b577195804f"
 BOT_TOKEN = "8446057086:AAFJWeh-sKiVxB_S82UUceogqKBCsjeYcSw"
-CHANNEL_ID = "mymovie"   # without @
-LINK_URL = "https://t.me/+4PtFW22RdZ0yYTA9"  #Thelinkusersgotowhenclickingthecaption
+CHANNEL_ID = -1003681497751
+LINK_URL = "https://t.me/+4PtFW22RdZ0yYTA9"  # The link users go to when clicking the caption
 
 # --- ANALYTICS FILE SETUP ---
 STATS_FILE = "stats.json"
@@ -198,5 +198,3 @@ async def send_movie_callback(client, callback: CallbackQuery):
 
 print("Bot Started...")
 app.run()
-
-
