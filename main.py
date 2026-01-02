@@ -545,11 +545,6 @@ async def send_movie_callback(client, callback: CallbackQuery):
         custom_caption = (
             f"<a href='{CHANNEL_LINK}'>{f_name}</a>\n"
             f"<b>Size:</b> {f_size}\n\n"
-            f"💡 <b>For Best Experience:</b>\n"
-            f"   📱 Phone: Use MX Player\n"
-            f"   💻 PC: Use VLC Media Player\n\n"
-            f"💡 <b>Behtar Anubhav Ke Liye:</b>\n"
-            f"   📱 Phone: MX Player use karein\n"
             f"   💻 PC: VLC Media Player use karein"
         )
         
@@ -614,3 +609,4 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
 
 print("Bot Started...")
 app.run()
+
