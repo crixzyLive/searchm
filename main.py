@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
@@ -19,6 +19,9 @@ STATS_FILE = "stats.json"
 
 # Global dictionary to store search results for pagination
 USER_SESSIONS = {}
+
+# Rate limiting for groups: {group_id: {'last_request': datetime, 'file_count': 0, 'reset_time': datetime}}
+GROUP_RATE_LIMITS = {}
 
 # --- LOAD DATABASE ---
 if os.path.exists("movies.json"):
@@ -132,6 +135,60 @@ def get_total_database_size():
 def is_command(text):
     """Check if the message starts with a slash (/) indicating it's a command"""
     return text.strip().startswith("/")
+
+# --- HELPER: GET GROUP INVITE LINK ---
+async def get_group_link(client, chat_id):
+    """Get the invite link for a group"""
+    try:
+        chat = await client.get_chat(chat_id)
+        if chat.username:
+            return f"https://t.me/{chat.username}"
+        else:
+            # Try to get invite link
+            try:
+                link = await client.export_chat_invite_link(chat_id)
+                return link
+            except:
+                return None
+    except:
+        return None
+
+# --- HELPER: CHECK GROUP RATE LIMIT ---
+def check_group_rate_limit(group_id):
+    """Check if group has exceeded rate limit (1 request, 5 files per 20 seconds)"""
+    now = datetime.now()
+    
+    if group_id not in GROUP_RATE_LIMITS:
+        GROUP_RATE_LIMITS[group_id] = {
+            'last_request': now,
+            'file_count': 0,
+            'reset_time': now + timedelta(seconds=20)
+        }
+        return True, 0
+    
+    limit_data = GROUP_RATE_LIMITS[group_id]
+    
+    # Reset if 20 seconds have passed
+    if now >= limit_data['reset_time']:
+        GROUP_RATE_LIMITS[group_id] = {
+            'last_request': now,
+            'file_count': 0,
+            'reset_time': now + timedelta(seconds=20)
+        }
+        return True, 0
+    
+    # Check if already had a request in this window
+    if limit_data['file_count'] >= 5:
+        remaining_time = (limit_data['reset_time'] - now).seconds
+        return False, remaining_time
+    
+    return True, 0
+
+# --- HELPER: UPDATE GROUP RATE LIMIT ---
+def update_group_rate_limit(group_id):
+    """Increment file count for group"""
+    if group_id in GROUP_RATE_LIMITS:
+        GROUP_RATE_LIMITS[group_id]['file_count'] += 1
 
 # --- HELPER: SHOW PAGE ---
 async def show_page(client, chat_id, user_id, page=1, status_msg=None):
@@ -482,6 +539,12 @@ async def group_movie_command(client, message):
         await message.reply("Please provide a movie name.\nKripya movie ka naam dijiye.\n\nExample: `/movie Avengers`")
         return
     
+    # Check rate limit
+    can_proceed, wait_time = check_group_rate_limit(message.chat.id)
+    if not can_proceed:
+        await message.reply(f"⏳ Rate limit reached. Please wait {wait_time} seconds before next request.")
+        return
+    
     user_query = " ".join(message.command[1:]).strip().lower()
     words = user_query.split()
     
@@ -518,6 +581,19 @@ async def group_movie_command(client, message):
     
     USER_SESSIONS[message.from_user.id] = found_movies
     await show_group_page(client, message.chat.id, message.from_user.id, page=1, status_msg=status_msg)
+    
+    # Schedule deletion of result message after 2 minutes
+    asyncio.create_task(delete_after_delay(status_msg, 120))
+
+
+# --- HELPER: DELETE MESSAGE AFTER DELAY ---
+async def delete_after_delay(message, delay):
+    """Delete a message after specified delay in seconds"""
+    try:
+        await asyncio.sleep(delay)
+        await message.delete()
+    except:
+        pass
 
 
 # --- PAGINATION CALLBACK (Private) ---
@@ -559,7 +635,7 @@ async def send_movie_callback(client, callback: CallbackQuery):
             f"<a href='{CHANNEL_LINK}'>{f_name}</a>\n"
             f"<b>Size:</b> {f_size}\n\n"
             f"📱 Phone: MX Player use karein\n"
-            f"   💻 PC: VLC Media Player use karein"
+            f"💻 PC: VLC Media Player use karein"
         )
         
         keyboard = InlineKeyboardMarkup([
@@ -582,40 +658,71 @@ async def send_movie_callback(client, callback: CallbackQuery):
 # --- DOWNLOAD CALLBACK (Group Only) ---
 @app.on_callback_query(filters.regex(r"^grp_dl_"))
 async def send_group_movie_callback(client, callback: CallbackQuery):
+    # Check rate limit
+    can_proceed, wait_time = check_group_rate_limit(callback.message.chat.id)
+    if not can_proceed:
+        await callback.answer(f"⏳ Rate limit reached. Wait {wait_time}s", show_alert=True)
+        return
+    
     file_id = int(callback.data.split("_")[2])
     
     movie_info = next((m for m in MOVIE_DB if m['id'] == file_id), None)
     
     await callback.answer("Sending file...")
     update_stats("download", user_id=callback.from_user.id)
+    update_group_rate_limit(callback.message.chat.id)
     
     try:
+        # Get group link
+        group_link = await get_group_link(client, callback.message.chat.id)
+        
         f_size = get_readable_size(movie_info['size']) if movie_info else ""
         f_name = movie_info['name'] if movie_info else "Movie File"
         
-        custom_caption = (
-            f"<a href='{CHANNEL_LINK}'>{f_name}</a>\n"
-            f"<b>Size:</b> {f_size}\n\n"
-            f"⚠️ <b>File will be deleted in 1 minute. Forward it now!</b>\n"
-            f"⚠️ <b>File 1 minute mein delete ho jayegi. Abhi forward karein!</b>\n\n"
-            f"💡 Use MX Player (phone) / VLC (PC) for best experience"
-        )
+        # Build caption with text links (no buttons)
+        custom_caption = f"{f_name}\n<b>Size:</b> {f_size}\n\n"
         
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📢 Join Channel / Channel Join Karein", url=CHANNEL_LINK)]
-        ])
+        # Add group link as text if available
+        if group_link:
+            custom_caption += f"<a href='{group_link}'>Join Group</a>\n"
+        
+        # Add movie channel link as text
+        custom_caption += f"<a href='{CHANNEL_LINK}'>Join Movie Channel</a>"
 
         sent_msg = await client.copy_message(
             chat_id=callback.message.chat.id,
             from_chat_id=CHANNEL_ID,
             message_id=file_id,
             caption=custom_caption,
-            reply_markup=keyboard,
             parse_mode=enums.ParseMode.HTML
         )
         
+        # Tag the user and notify about deletion
+        user_mention = f"<a href='tg://user?id={callback.from_user.id}'>{callback.from_user.first_name}</a>"
+        notification_text = (
+            f"Hey {user_mention}! ⚠️\n\n"
+            f"Your file will be deleted in 1 minute to avoid copyright issues.\n"
+            f"Please forward it somewhere safe now!\n\n"
+            f"आपकी file 1 minute में delete हो जाएगी।\n"
+            f"कृपया इसे कहीं safe forward कर लें!"
+        )
+        
+        notification_msg = await client.send_message(
+            chat_id=callback.message.chat.id,
+            text=notification_text,
+            parse_mode=enums.ParseMode.HTML,
+            reply_to_message_id=sent_msg.id
+        )
+        
+        # Delete file after 1 minute
         await asyncio.sleep(60)
         await sent_msg.delete()
+        
+        # Also delete notification message
+        try:
+            await notification_msg.delete()
+        except:
+            pass
         
     except Exception as e:
         await callback.message.reply(f"Error: {e}")
