@@ -10,8 +10,21 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 API_ID = 21862154
 API_HASH = "af2a54cdf05008758eca7b577195804f"
 BOT_TOKEN = "8446057086:AAFJWeh-sKiVxB_S82UUceogqKBCsjeYcSw"
-CHANNEL_ID = -1003681497751
-CHANNEL_LINK = "https://t.me/+4PtFW22RdZ0yYTA9"
+
+# Multiple channels configuration
+CHANNELS = [
+    {
+        "id": -1003681497751,
+        "link": "https://t.me/+4PtFW22RdZ0yYTA9",
+        "db_file": "movies.json"
+    },
+    {
+        "id": -1002345678901,  # Replace with your second channel ID
+        "link": "https://t.me/+YourSecondChannelLink",  # Replace with your second channel link
+        "db_file": "movies2.json"
+    }
+]
+
 ADMIN_IDS = []  # Add admin user IDs here for restricted commands
 
 # --- ANALYTICS FILE SETUP ---
@@ -23,14 +36,31 @@ USER_SESSIONS = {}
 # Rate limiting for groups: {group_id: {'last_request': datetime, 'file_count': 0, 'reset_time': datetime}}
 GROUP_RATE_LIMITS = {}
 
-# --- LOAD DATABASE ---
-if os.path.exists("movies.json"):
-    with open("movies.json", "r", encoding="utf-8") as f:
-        MOVIE_DB = json.load(f)
-    print(f"✅ Database Loaded: {len(MOVIE_DB)} movies.")
+# --- LOAD DATABASES FROM MULTIPLE CHANNELS ---
+MOVIE_DB = []
+CHANNEL_MAP = {}  # Maps movie IDs to their channel info
+
+for channel in CHANNELS:
+    db_file = channel["db_file"]
+    if os.path.exists(db_file):
+        with open(db_file, "r", encoding="utf-8") as f:
+            movies = json.load(f)
+            print(f"✅ Loaded {len(movies)} movies from {db_file}")
+            
+            # Add movies to main database and map them to their channel
+            for movie in movies:
+                MOVIE_DB.append(movie)
+                CHANNEL_MAP[movie['id']] = {
+                    "channel_id": channel["id"],
+                    "channel_link": channel["link"]
+                }
+    else:
+        print(f"⚠️ Warning: '{db_file}' not found!")
+
+if not MOVIE_DB:
+    print("❌ ERROR: No movie databases found. Run indexer.py first!")
 else:
-    print("❌ ERROR: 'movies.json' not found. Run indexer.py first!")
-    MOVIE_DB = []
+    print(f"✅ Total Database Loaded: {len(MOVIE_DB)} movies from {len(CHANNELS)} channels.")
 
 app = Client("movie_search_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -190,6 +220,11 @@ def update_group_rate_limit(group_id):
     if group_id in GROUP_RATE_LIMITS:
         GROUP_RATE_LIMITS[group_id]['file_count'] += 1
 
+# --- HELPER: GET DEFAULT CHANNEL LINK ---
+def get_default_channel_link():
+    """Get the first channel link as default"""
+    return CHANNELS[0]["link"] if CHANNELS else "#"
+
 # --- HELPER: SHOW PAGE ---
 async def show_page(client, chat_id, user_id, page=1, status_msg=None):
     """Displays the specific page of results."""
@@ -320,7 +355,7 @@ Bas movie ka naam bhejein aur search shuru karein!
 """
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Join Channel / Channel Join Karein", url=CHANNEL_LINK)]
+        [InlineKeyboardButton("📢 Join Channel / Channel Join Karein", url=get_default_channel_link())]
     ])
     
     await message.reply(guide_text, reply_markup=keyboard)
@@ -362,7 +397,7 @@ Group: `/movie Avengers Endgame`
 """
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK)]
+        [InlineKeyboardButton("📢 Join Channel", url=get_default_channel_link())]
     ])
     
     await message.reply(help_text, reply_markup=keyboard)
@@ -386,6 +421,7 @@ async def stats_command(client, message):
 **Database Info / Database Jaankari:**
 🎬 Total Movies: **{total_movies:,}**
 💾 Total Size: **{total_size}**
+📺 Channels: **{len(CHANNELS)}**
 
 **Usage Stats / Upyog Statistics:**
 🔍 Total Searches: **{stats.get('total_searches', 0):,}**
@@ -404,7 +440,7 @@ async def stats_command(client, message):
 """
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK)]
+        [InlineKeyboardButton("📢 Join Channel", url=get_default_channel_link())]
     ])
     
     await message.reply(stats_text, reply_markup=keyboard)
@@ -424,6 +460,8 @@ Yeh ek advanced movie search aur download bot hai jo aapko movies jaldi dhoondhn
 ✨ **Features / Visheshta:**
 • Fast search with smart algorithm
   Tez search smart algorithm ke saath
+• Multiple channel support
+  Kayi channels se support
 • Pagination support for large results
   Bade results ke liye pagination support
 • Size display for every file
@@ -443,12 +481,12 @@ Pyrogram aur Python se banaaya gaya
 3. Check file size before downloading
 
 📢 **Stay Updated / Judey Rahein:**
-Join our channel for latest movies!
-Nayi movies ke liye hamara channel join karein!
+Join our channels for latest movies!
+Nayi movies ke liye hamare channels join karein!
 """
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK)],
+        [InlineKeyboardButton("📢 Join Channel", url=get_default_channel_link())],
         [InlineKeyboardButton("📊 View Stats", callback_data="view_stats")]
     ])
     
@@ -469,6 +507,7 @@ async def view_stats_callback(client, callback: CallbackQuery):
     quick_stats = f"""
 📊 Quick Stats:
 🎬 Movies: {total_movies:,}
+📺 Channels: {len(CHANNELS)}
 🔍 Searches: {stats.get('total_searches', 0):,}
 📤 Files Sent: {stats.get('files_sent', 0):,}
 👥 Users: {stats.get('unique_users', 0):,}
@@ -624,6 +663,12 @@ async def send_movie_callback(client, callback: CallbackQuery):
     
     movie_info = next((m for m in MOVIE_DB if m['id'] == file_id), None)
     
+    # Get the correct channel info for this movie
+    channel_info = CHANNEL_MAP.get(file_id)
+    if not channel_info:
+        await callback.answer("Error: Channel information not found", show_alert=True)
+        return
+    
     await callback.answer("Sending file...")
     update_stats("download", user_id=callback.from_user.id)
     
@@ -632,19 +677,19 @@ async def send_movie_callback(client, callback: CallbackQuery):
         f_name = movie_info['name'] if movie_info else "Movie File"
         
         custom_caption = (
-            f"<a href='{CHANNEL_LINK}'>{f_name}</a>\n"
+            f"<a href='{channel_info['channel_link']}'>{f_name}</a>\n"
             f"<b>Size:</b> {f_size}\n\n"
             f"📱 Phone: MX Player use karein\n"
             f"💻 PC: VLC Media Player use karein"
         )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📢 Join Channel / Channel Join Karein", url=CHANNEL_LINK)]
+            [InlineKeyboardButton("📢 Join Channel / Channel Join Karein", url=channel_info['channel_link'])]
         ])
 
         await client.copy_message(
             chat_id=callback.message.chat.id,
-            from_chat_id=CHANNEL_ID,
+            from_chat_id=channel_info['channel_id'],
             message_id=file_id,
             caption=custom_caption,
             reply_markup=keyboard,
@@ -668,6 +713,12 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
     
     movie_info = next((m for m in MOVIE_DB if m['id'] == file_id), None)
     
+    # Get the correct channel info for this movie
+    channel_info = CHANNEL_MAP.get(file_id)
+    if not channel_info:
+        await callback.answer("Error: Channel information not found", show_alert=True)
+        return
+    
     await callback.answer("Sending file...")
     update_stats("download", user_id=callback.from_user.id)
     update_group_rate_limit(callback.message.chat.id)
@@ -687,11 +738,11 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
             custom_caption += f"<a href='{group_link}'>Join Group</a>\n"
         
         # Add movie channel link as text
-        custom_caption += f"<a href='{CHANNEL_LINK}'>Join Movie Channel</a>"
+        custom_caption += f"<a href='{channel_info['channel_link']}'>Join Movie Channel</a>"
 
         sent_msg = await client.copy_message(
             chat_id=callback.message.chat.id,
-            from_chat_id=CHANNEL_ID,
+            from_chat_id=channel_info['channel_id'],
             message_id=file_id,
             caption=custom_caption,
             parse_mode=enums.ParseMode.HTML
@@ -730,4 +781,3 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
 
 print("Bot Started...")
 app.run()
-
