@@ -686,7 +686,7 @@ async def send_movie_callback(client, callback: CallbackQuery):
         )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📢 Join Channel for the update and for backup this bot ban soon..", url=channel_info['channel_link'])]
+            [InlineKeyboardButton("📢Join Channel for update and for backup this bot ban soon..", url=channel_info['channel_link'])]
         ])
 
         await client.copy_message(
@@ -783,3 +783,4 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
 
 print("Bot Started...")
 app.run()
+
