@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import urllib.parse
+import zipfile  # <--- NEW IMPORT
 from datetime import datetime, timedelta
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -16,53 +17,74 @@ CHANNELS = [
     {
         "id": -1003681497751,
         "link": "https://t.me/+4PtFW22RdZ0yYTA9",
-        "db_file": "movies.json"
+        "db_file": "movies.json" 
     },
     {
-        "id": -1002345678901,  # Replace with your second channel ID
-        "link": "https://t.me/+YourSecondChannelLink",  # Replace with your second channel link
-        "db_file": "movies2.json"
+        "id": -1003649132067, 
+        "link": "https://t.me/+4PtFW22RdZ0yYTA9", 
+        "db_file": "movies2.zip"  # <--- CHANGE THIS TO .zip
     }
 ]
 
-ADMIN_IDS = []  # Add admin user IDs here for restricted commands
+ADMIN_IDS = [] 
 
 # --- ANALYTICS FILE SETUP ---
 STATS_FILE = "stats.json"
 
 # Global dictionary to store search results for pagination
 USER_SESSIONS = {}
-
-# Rate limiting for groups: {group_id: {'last_request': datetime, 'file_count': 0, 'reset_time': datetime}}
 GROUP_RATE_LIMITS = {}
 
 # --- LOAD DATABASES FROM MULTIPLE CHANNELS ---
 MOVIE_DB = []
-CHANNEL_MAP = {}  # Maps movie IDs to their channel info
+CHANNEL_MAP = {} 
+
+print("🔄 Loading databases...")
 
 for channel in CHANNELS:
     db_file = channel["db_file"]
-    if os.path.exists(db_file):
-        with open(db_file, "r", encoding="utf-8") as f:
-            movies = json.load(f)
-            print(f"✅ Loaded {len(movies)} movies from {db_file}")
+    movies = []
+    
+    try:
+        if os.path.exists(db_file):
+            # Check if it is a ZIP file
+            if db_file.endswith(".zip"):
+                print(f"📦 Unzipping and loading {db_file}...")
+                with zipfile.ZipFile(db_file, 'r') as z:
+                    # We assume the zip contains one json file. We read the first file found.
+                    file_in_zip = z.namelist()[0]
+                    with z.open(file_in_zip) as f:
+                        data = f.read()
+                        movies = json.loads(data)
             
-            # Add movies to main database and map them to their channel
+            # Check if it is a JSON file
+            elif db_file.endswith(".json"):
+                with open(db_file, "r", encoding="utf-8") as f:
+                    movies = json.load(f)
+            
+            print(f"✅ Loaded {len(movies)} movies from {db_file}")
+
+            # Add movies to main database
             for movie in movies:
                 MOVIE_DB.append(movie)
                 CHANNEL_MAP[movie['id']] = {
                     "channel_id": channel["id"],
                     "channel_link": channel["link"]
                 }
-    else:
-        print(f"⚠️ Warning: '{db_file}' not found!")
+        else:
+            print(f"⚠️ Warning: '{db_file}' not found!")
+            
+    except Exception as e:
+        print(f"❌ Error loading {db_file}: {e}")
 
 if not MOVIE_DB:
-    print("❌ ERROR: No movie databases found. Run indexer.py first!")
+    print("❌ ERROR: No movie databases found.")
 else:
     print(f"✅ Total Database Loaded: {len(MOVIE_DB)} movies from {len(CHANNELS)} channels.")
 
 app = Client("movie_search_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+# ... THE REST OF YOUR CODE REMAINS THE SAME ...
 
 # --- HELPER: INITIALIZE STATS ---
 def initialize_stats():
@@ -344,10 +366,10 @@ async def start_command(client, message):
    • Phone: Use MX Player
    • PC: Use VLC Media Player
 
-📋 **Available Commands / Uplabdh Commands:**
-   • `/help` - Show this guide / Yeh guide dikhayein
-   • `/stats` - Bot statistics / Bot ke statistics
-   • `/about` - About this bot / Bot ke baare mein
+📋 **Available Commands:**
+   • `/help` - Show this guide 
+   • `/stats` - Bot statistics 
+   • `/about` - About this bot
 
 ❓ **Need Help? / Madad Chahiye?**
 Just send the movie name and start searching!
@@ -367,27 +389,21 @@ async def help_command(client, message):
     help_text = """
 📖 **Bot Help / Bot Madad**
 
-**Available Commands / Uplabdh Commands:**
+**Available Commands :**
 
 🔹 `/start` - Start the bot and see guide
-   Bot shuru karein aur guide dekhein
 
 🔹 `/help` - Show this help message
-   Yeh help message dikhayein
 
 🔹 `/stats` - View bot statistics
-   Bot statistics dekhein
 
 🔹 `/about` - About this bot
-   Bot ke baare mein jaankari
 
 🔹 `/movie <name>` (Groups only) - Search movie in groups
-   Groups mein movie search karein
 
 **How to Search / Kaise Search Karein:**
 • In Private: Just type movie name
   Private mein: Bas movie ka naam type karein
-
 • In Groups: Use /movie command
   Groups mein: /movie command use karein
 
@@ -453,34 +469,21 @@ async def about_command(client, message):
 ℹ️ **About Movie Search Bot**
 **Movie Search Bot Ke Baare Mein**
 
-🎬 **What is this bot? / Yeh bot kya hai?**
+🎬 **What is this bot?**
 This is an advanced movie search and download bot that helps you find and download movies quickly.
-Yeh ek advanced movie search aur download bot hai jo aapko movies jaldi dhoondhne aur download karne mein madad karta hai.
-
-✨ **Features / Visheshta:**
-• Fast search with smart algorithm
-  Tez search smart algorithm ke saath
+✨ **Features **
+• Fast search with smart algorithm 
 • Multiple channel support
-  Kayi channels se support
 • Pagination support for large results
-  Bade results ke liye pagination support
 • Size display for every file
-  Har file ke liye size display
 • Auto-delete in groups (1 min)
-  Groups mein auto-delete (1 minute)
 • Bilingual support (English + Hindi)
-  Do bhasha support (Angrezi + Hindi)
-
-🔧 **Technology / Takneek:**
-Built with Pyrogram and Python
-Pyrogram aur Python se banaaya gaya
-
 💡 **Tips for Best Results:**
 1. Use correct spelling
 2. Try different variations
 3. Check file size before downloading
 
-📢 **Stay Updated / Judey Rahein:**
+📢 **Stay Updated:**
 Join our channels for latest movies!
 Nayi movies ke liye hamare channels join karein!
 """
@@ -522,8 +525,7 @@ async def search_handler(client, message):
     # Check if message starts with "/" - treat as unknown command
     if is_command(message.text):
         await message.reply(
-            "❌ Unknown command. Use /help to see available commands.\n"
-            "❌ Agyaat command. Uplabdh commands dekhne ke liye /help use karein."
+            "❌ Unknown command. Use /help to see available commands."
         )
         return
     
@@ -557,7 +559,7 @@ async def search_handler(client, message):
         google_link = f"https://www.google.com/search?q={google_query}"
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔍 Check Spelling on Google / Google Par Spelling Check Karein", url=google_link)]
+            [InlineKeyboardButton("🔍 Check Spelling on Google", url=google_link)]
         ])
         
         no_result_text = f"❌ **No results found for '{message.text}'**\n\n"
@@ -679,12 +681,12 @@ async def send_movie_callback(client, callback: CallbackQuery):
         custom_caption = (
             f"<a href='{channel_info['channel_link']}'>{f_name}</a>\n"
             f"<b>Size:</b> {f_size}\n\n"
-            f"📱 Phone: MX Player use karein\n"
-            f"💻 PC: VLC Media Player use karein"
+            f"📱Phone MXPlayer 💻PC VLC for better experiance\n"
+           
         )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📢 Join Channel / Channel Join Karein", url=channel_info['channel_link'])]
+            [InlineKeyboardButton("📢 Join Channel for the update and for backup this bot ban soon..", url=channel_info['channel_link'])]
         ])
 
         await client.copy_message(
