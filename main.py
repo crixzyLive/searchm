@@ -65,15 +65,21 @@ for channel in CHANNELS:
             print(f"✅ Loaded {len(movies)} movies from {db_file}")
 
             # Add movies to main database AND map them to THIS channel
+            # Only add if the movie ID doesn't already exist (first come, first served)
             for movie in movies:
-                MOVIE_DB.append(movie)
-                
-                # Map this movie's ID to THIS specific channel
-                CHANNEL_MAP[movie['id']] = {
-                    "channel_id": channel["id"],
-                    "channel_link": channel["link"],
-                    "db_file": db_file  # Added for debugging
-                }
+                # Check if this movie ID already exists in CHANNEL_MAP
+                if movie['id'] not in CHANNEL_MAP:
+                    MOVIE_DB.append(movie)
+                    
+                    # Map this movie's ID to THIS specific channel
+                    CHANNEL_MAP[movie['id']] = {
+                        "channel_id": channel["id"],
+                        "channel_link": channel["link"],
+                        "db_file": db_file  # Added for debugging
+                    }
+                else:
+                    # Movie ID already exists - skip duplicate
+                    print(f"⚠️ Skipping duplicate movie ID {movie['id']} from {db_file} (already in {CHANNEL_MAP[movie['id']]['db_file']})")
         else:
             print(f"⚠️ Warning: '{db_file}' not found!")
             
