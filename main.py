@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import urllib.parse
-import zipfile  # <--- NEW IMPORT
+import zipfile
 from datetime import datetime, timedelta
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -22,7 +22,7 @@ CHANNELS = [
     {
         "id": -1003649132067, 
         "link": "https://t.me/+4PtFW22RdZ0yYTA9", 
-        "db_file": "movies2.zip"  # <--- CHANGE THIS TO .zip
+        "db_file": "movies2.zip"
     }
 ]
 
@@ -64,12 +64,15 @@ for channel in CHANNELS:
             
             print(f"✅ Loaded {len(movies)} movies from {db_file}")
 
-            # Add movies to main database
+            # Add movies to main database AND map them to THIS channel
             for movie in movies:
                 MOVIE_DB.append(movie)
+                
+                # Map this movie's ID to THIS specific channel
                 CHANNEL_MAP[movie['id']] = {
                     "channel_id": channel["id"],
-                    "channel_link": channel["link"]
+                    "channel_link": channel["link"],
+                    "db_file": db_file  # Added for debugging
                 }
         else:
             print(f"⚠️ Warning: '{db_file}' not found!")
@@ -81,10 +84,9 @@ if not MOVIE_DB:
     print("❌ ERROR: No movie databases found.")
 else:
     print(f"✅ Total Database Loaded: {len(MOVIE_DB)} movies from {len(CHANNELS)} channels.")
+    print(f"✅ Channel Map Entries: {len(CHANNEL_MAP)}")
 
 app = Client("movie_search_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-# ... THE REST OF YOUR CODE REMAINS THE SAME ...
 
 # --- HELPER: INITIALIZE STATS ---
 def initialize_stats():
@@ -663,30 +665,39 @@ async def ignore_callback(client, callback: CallbackQuery):
 async def send_movie_callback(client, callback: CallbackQuery):
     file_id = int(callback.data.split("_")[1])
     
+    # Find movie info
     movie_info = next((m for m in MOVIE_DB if m['id'] == file_id), None)
     
-    # Get the correct channel info for this movie
+    if not movie_info:
+        await callback.answer("Error: Movie not found in database", show_alert=True)
+        return
+    
+    # Get the correct channel info for this movie from CHANNEL_MAP
     channel_info = CHANNEL_MAP.get(file_id)
+    
     if not channel_info:
         await callback.answer("Error: Channel information not found", show_alert=True)
+        print(f"⚠️ WARNING: Movie ID {file_id} not found in CHANNEL_MAP")
         return
+    
+    # Debug: Print which channel this file belongs to
+    print(f"📤 Sending file {file_id} from channel {channel_info['channel_id']} (DB: {channel_info.get('db_file', 'unknown')})")
     
     await callback.answer("Sending file...")
     update_stats("download", user_id=callback.from_user.id)
     
     try:
-        f_size = get_readable_size(movie_info['size']) if movie_info else ""
-        f_name = movie_info['name'] if movie_info else "Movie File"
+        f_size = get_readable_size(movie_info['size'])
+        f_name = movie_info['name']
         
         custom_caption = (
             f"<a href='{channel_info['channel_link']}'>{f_name}</a>\n"
             f"<b>Size:</b> {f_size}\n\n"
             f"📱Phone MXPlayer 💻PC VLC for better experiance\n"
-           
         )
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📢Join Channel for update and for backup this bot ban soon..", url=channel_info['channel_link'])]
+            [InlineKeyboardButton("📢 Join Channel for the update and for backup this bot ban soon..", url=channel_info['channel_link'])]
         ])
 
         await client.copy_message(
@@ -699,7 +710,10 @@ async def send_movie_callback(client, callback: CallbackQuery):
         )
         
     except Exception as e:
-        await callback.message.reply(f"Error: {e}")
+        error_msg = f"Error sending file: {e}\n"
+        error_msg += f"Channel ID: {channel_info['channel_id']}, File ID: {file_id}"
+        print(f"❌ {error_msg}")
+        await callback.message.reply(error_msg)
 
 
 # --- DOWNLOAD CALLBACK (Group Only) ---
@@ -713,13 +727,23 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
     
     file_id = int(callback.data.split("_")[2])
     
+    # Find movie info
     movie_info = next((m for m in MOVIE_DB if m['id'] == file_id), None)
     
-    # Get the correct channel info for this movie
+    if not movie_info:
+        await callback.answer("Error: Movie not found in database", show_alert=True)
+        return
+    
+    # Get the correct channel info for this movie from CHANNEL_MAP
     channel_info = CHANNEL_MAP.get(file_id)
+    
     if not channel_info:
         await callback.answer("Error: Channel information not found", show_alert=True)
+        print(f"⚠️ WARNING: Movie ID {file_id} not found in CHANNEL_MAP")
         return
+    
+    # Debug: Print which channel this file belongs to
+    print(f"📤 Sending file {file_id} from channel {channel_info['channel_id']} (DB: {channel_info.get('db_file', 'unknown')})")
     
     await callback.answer("Sending file...")
     update_stats("download", user_id=callback.from_user.id)
@@ -729,8 +753,8 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
         # Get group link
         group_link = await get_group_link(client, callback.message.chat.id)
         
-        f_size = get_readable_size(movie_info['size']) if movie_info else ""
-        f_name = movie_info['name'] if movie_info else "Movie File"
+        f_size = get_readable_size(movie_info['size'])
+        f_name = movie_info['name']
         
         # Build caption with text links (no buttons)
         custom_caption = f"{f_name}\n<b>Size:</b> {f_size}\n\n"
@@ -778,9 +802,11 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
             pass
         
     except Exception as e:
-        await callback.message.reply(f"Error: {e}")
+        error_msg = f"Error sending file: {e}\n"
+        error_msg += f"Channel ID: {channel_info['channel_id']}, File ID: {file_id}"
+        print(f"❌ {error_msg}")
+        await callback.message.reply(error_msg)
 
 
 print("Bot Started...")
 app.run()
-
