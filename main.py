@@ -12,13 +12,8 @@ API_ID = 21862154
 API_HASH = "af2a54cdf05008758eca7b577195804f"
 BOT_TOKEN = "8446057086:AAFJWeh-sKiVxB_S82UUceogqKBCsjeYcSw"
 
-# Multiple channels configuration
+# Single channel configuration - only movies2.zip
 CHANNELS = [
-    {
-        "id": -1003681497751,
-        "link": "https://t.me/+4PtFW22RdZ0yYTA9",
-        "db_file": "movies.json" 
-    },
     {
         "id": -1003649132067, 
         "link": "https://t.me/+4PtFW22RdZ0yYTA9", 
@@ -65,21 +60,15 @@ for channel in CHANNELS:
             print(f"✅ Loaded {len(movies)} movies from {db_file}")
 
             # Add movies to main database AND map them to THIS channel
-            # Only add if the movie ID doesn't already exist (first come, first served)
             for movie in movies:
-                # Check if this movie ID already exists in CHANNEL_MAP
-                if movie['id'] not in CHANNEL_MAP:
-                    MOVIE_DB.append(movie)
-                    
-                    # Map this movie's ID to THIS specific channel
-                    CHANNEL_MAP[movie['id']] = {
-                        "channel_id": channel["id"],
-                        "channel_link": channel["link"],
-                        "db_file": db_file  # Added for debugging
-                    }
-                else:
-                    # Movie ID already exists - skip duplicate
-                    print(f"⚠️ Skipping duplicate movie ID {movie['id']} from {db_file} (already in {CHANNEL_MAP[movie['id']]['db_file']})")
+                MOVIE_DB.append(movie)
+                
+                # Map this movie's ID to THIS specific channel
+                CHANNEL_MAP[movie['id']] = {
+                    "channel_id": channel["id"],
+                    "channel_link": channel["link"],
+                    "db_file": db_file
+                }
         else:
             print(f"⚠️ Warning: '{db_file}' not found!")
             
@@ -89,7 +78,7 @@ for channel in CHANNELS:
 if not MOVIE_DB:
     print("❌ ERROR: No movie databases found.")
 else:
-    print(f"✅ Total Database Loaded: {len(MOVIE_DB)} movies from {len(CHANNELS)} channels.")
+    print(f"✅ Total Database Loaded: {len(MOVIE_DB)} movies from {len(CHANNELS)} channel(s).")
     print(f"✅ Channel Map Entries: {len(CHANNEL_MAP)}")
 
 app = Client("movie_search_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -481,7 +470,7 @@ async def about_command(client, message):
 This is an advanced movie search and download bot that helps you find and download movies quickly.
 ✨ **Features **
 • Fast search with smart algorithm 
-• Multiple channel support
+• Single channel support
 • Pagination support for large results
 • Size display for every file
 • Auto-delete in groups (1 min)
@@ -492,8 +481,8 @@ This is an advanced movie search and download bot that helps you find and downlo
 3. Check file size before downloading
 
 📢 **Stay Updated:**
-Join our channels for latest movies!
-Nayi movies ke liye hamare channels join karein!
+Join our channel for latest movies!
+Nayi movies ke liye hamare channel join karein!
 """
     
     keyboard = InlineKeyboardMarkup([
@@ -696,6 +685,62 @@ async def send_movie_callback(client, callback: CallbackQuery):
         f_size = get_readable_size(movie_info['size'])
         f_name = movie_info['name']
         
+        # Build caption with text links (no buttons)
+        custom_caption = f"{f_name}\n<b>Size:</b> {f_size}\n\n"
+        
+        # Add group link as text if available
+        if group_link:
+            custom_caption += f"<a href='{group_link}'>Join Group</a>\n"
+        
+        # Add movie channel link as text
+        custom_caption += f"<a href='{channel_info['channel_link']}'>Join Movie Channel</a>"
+
+        sent_msg = await client.copy_message(
+            chat_id=callback.message.chat.id,
+            from_chat_id=channel_info['channel_id'],
+            message_id=file_id,
+            caption=custom_caption,
+            parse_mode=enums.ParseMode.HTML
+        )
+        
+        # Tag the user and notify about deletion
+        user_mention = f"<a href='tg://user?id={callback.from_user.id}'>{callback.from_user.first_name}</a>"
+        notification_text = (
+            f"Hey {user_mention}! ⚠️\n\n"
+            f"Your file will be deleted in 1 minute to avoid copyright issues.\n"
+            f"Please forward it somewhere safe now!\n\n"
+            f"आपकी file 1 minute में delete हो जाएगी।\n"
+            f"कृपया इसे कहीं safe forward कर लें!"
+        )
+        
+        notification_msg = await client.send_message(
+            chat_id=callback.message.chat.id,
+            text=notification_text,
+            parse_mode=enums.ParseMode.HTML,
+            reply_to_message_id=sent_msg.id
+        )
+        
+        # Delete file after 1 minute
+        await asyncio.sleep(60)
+        await sent_msg.delete()
+        
+        # Also delete notification message
+        try:
+            await notification_msg.delete()
+        except:
+            pass
+        
+    except Exception as e:
+        error_msg = f"Error sending file: {e}\n"
+        error_msg += f"Channel ID: {channel_info['channel_id']}, File ID: {file_id}"
+        print(f"❌ {error_msg}")
+        await callback.message.reply(error_msg)
+
+
+print("Bot Started...")
+app.run()
+        f_name = movie_info['name']
+        
         custom_caption = (
             f"<a href='{channel_info['channel_link']}'>{f_name}</a>\n"
             f"<b>Size:</b> {f_size}\n\n"
@@ -760,59 +805,3 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
         group_link = await get_group_link(client, callback.message.chat.id)
         
         f_size = get_readable_size(movie_info['size'])
-        f_name = movie_info['name']
-        
-        # Build caption with text links (no buttons)
-        custom_caption = f"{f_name}\n<b>Size:</b> {f_size}\n\n"
-        
-        # Add group link as text if available
-        if group_link:
-            custom_caption += f"<a href='{group_link}'>Join Group</a>\n"
-        
-        # Add movie channel link as text
-        custom_caption += f"<a href='{channel_info['channel_link']}'>Join Movie Channel</a>"
-
-        sent_msg = await client.copy_message(
-            chat_id=callback.message.chat.id,
-            from_chat_id=channel_info['channel_id'],
-            message_id=file_id,
-            caption=custom_caption,
-            parse_mode=enums.ParseMode.HTML
-        )
-        
-        # Tag the user and notify about deletion
-        user_mention = f"<a href='tg://user?id={callback.from_user.id}'>{callback.from_user.first_name}</a>"
-        notification_text = (
-            f"Hey {user_mention}! ⚠️\n\n"
-            f"Your file will be deleted in 1 minute to avoid copyright issues.\n"
-            f"Please forward it somewhere safe now!\n\n"
-            f"आपकी file 1 minute में delete हो जाएगी।\n"
-            f"कृपया इसे कहीं safe forward कर लें!"
-        )
-        
-        notification_msg = await client.send_message(
-            chat_id=callback.message.chat.id,
-            text=notification_text,
-            parse_mode=enums.ParseMode.HTML,
-            reply_to_message_id=sent_msg.id
-        )
-        
-        # Delete file after 1 minute
-        await asyncio.sleep(60)
-        await sent_msg.delete()
-        
-        # Also delete notification message
-        try:
-            await notification_msg.delete()
-        except:
-            pass
-        
-    except Exception as e:
-        error_msg = f"Error sending file: {e}\n"
-        error_msg += f"Channel ID: {channel_info['channel_id']}, File ID: {file_id}"
-        print(f"❌ {error_msg}")
-        await callback.message.reply(error_msg)
-
-
-print("Bot Started...")
-app.run()
