@@ -215,7 +215,7 @@ async def show_page(client, chat_id, user_id, page=1, status_msg=None):
 
     results = USER_SESSIONS[user_id]
     total_results = len(results)
-    items_per_page = 15
+    items_per_page = 8
     total_pages = (total_results + items_per_page - 1) // items_per_page
 
     start = (page - 1) * items_per_page
@@ -255,7 +255,7 @@ async def show_group_page(client, chat_id, user_id, page=1, status_msg=None):
 
     results = USER_SESSIONS[user_id]
     total_results = len(results)
-    items_per_page = 15
+    items_per_page = 8
     total_pages = (total_results + items_per_page - 1) // items_per_page
 
     start = (page - 1) * items_per_page
@@ -719,3 +719,4 @@ async def send_group_movie_callback(client, callback: CallbackQuery):
 
 print("Bot Started...")
 app.run()
+
